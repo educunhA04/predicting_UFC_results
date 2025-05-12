@@ -1,4 +1,3 @@
-# clean_from_zip.py
 import pandas as pd
 import zipfile
 import os
