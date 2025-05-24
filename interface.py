@@ -11,7 +11,7 @@ from sklearn.neural_network import MLPClassifier
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import StandardScaler, RobustScaler
-from sklearn.model_selection import train_test_split, cross_val_score, GridSearchCV
+from sklearn.model_selection import train_test_split, cross_val_score
 from sklearn.feature_selection import SelectKBest, f_classif, RFE
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, roc_curve, auc
 import warnings
@@ -128,11 +128,31 @@ st.markdown("""
         margin: 20px 0;
         box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
     }
-    .sidebar .stSelectbox > div > div {
-        background-color: #f8f9fa;
-    }
 </style>
 """, unsafe_allow_html=True)
+
+def get_stat_advantage_text(stat_name, val1, val2, fighter1_name, fighter2_name):
+    """Get properly formatted advantage text for different types of statistics"""
+    diff = val1 - val2
+    
+    # Stats where less is better
+    less_is_better = ['Losses', 'Age', 'SApM']
+    
+    if stat_name in less_is_better:
+        if diff < 0:  # Fighter 1 has less (better)
+            return f"🔴 {fighter1_name} ({abs(diff):.1f} fewer)", "stat-diff-positive"
+        elif diff > 0:  # Fighter 1 has more (worse)  
+            return f"🔵 {fighter2_name} ({diff:.1f} fewer)", "stat-diff-positive"
+        else:
+            return "⚖️ Equal", "stat-diff-neutral"
+    else:
+        # Normal logic: more is better
+        if diff > 0:
+            return f"🔴 {fighter1_name} (+{diff:.1f})", "stat-diff-positive"
+        elif diff < 0:
+            return f"🔵 {fighter2_name} (+{abs(diff):.1f})", "stat-diff-positive"
+        else:
+            return "⚖️ Equal", "stat-diff-neutral"
 
 # Helper function for model grading
 def get_model_grade(accuracy, overfitting):
@@ -150,7 +170,7 @@ def get_model_grade(accuracy, overfitting):
 
 def is_ensemble_model(model_name):
     """Check if model is an ensemble/mix"""
-    ensemble_indicators = ['ensemble', 'voting', 'professional ensemble', 'mix', 'combined']
+    ensemble_indicators = ['ensemble', 'voting', 'combined', 'mix', 'fusion']
     return any(indicator in model_name.lower() for indicator in ensemble_indicators)
 
 def get_ensemble_info(model_name, trained_models):
@@ -167,7 +187,54 @@ def get_ensemble_info(model_name, trained_models):
             }
     return None
 
-# Advanced feature engineering and model training
+def create_sample_data():
+    """Create sample data for demonstration if real dataset is not available"""
+    np.random.seed(42)
+    n_samples = 1500  # Restored original size
+    
+    # Fighter names
+    fighter_names = [f"Fighter_{i}" for i in range(1, 201)]  # Restored original size
+    
+    # Generate fight data
+    data = {
+        'fighter1': np.random.choice(fighter_names, n_samples),
+        'fighter2': np.random.choice(fighter_names, n_samples),
+        'fight_outcome': np.random.choice([0, 1], n_samples)
+    }
+    
+    # Add fighter stats
+    stats = ['Weight', 'Reach', 'Height_in', 'Wins', 'Losses', 'Draws', 'Age',
+             'SLpM', 'StrAcc', 'StrDef', 'SApM', 'TDAvg', 'TDAcc', 'TDDef', 'SubAvg']
+    
+    stances = ['Orthodox', 'Southpaw', 'Switch']
+    
+    for i in [1, 2]:
+        for stat in stats:
+            if stat == 'Weight':
+                data[f'fighter{i}_{stat}'] = np.random.normal(175, 25, n_samples)
+            elif stat == 'Reach':
+                data[f'fighter{i}_{stat}'] = np.random.normal(72, 4, n_samples)
+            elif stat == 'Height_in':
+                data[f'fighter{i}_{stat}'] = np.random.normal(70, 3, n_samples)
+            elif stat in ['Wins', 'Losses']:
+                data[f'fighter{i}_{stat}'] = np.random.randint(0, 25, n_samples)
+            elif stat == 'Draws':
+                data[f'fighter{i}_{stat}'] = np.random.randint(0, 3, n_samples)
+            elif stat == 'Age':
+                data[f'fighter{i}_{stat}'] = np.random.normal(28, 4, n_samples)
+            else:
+                data[f'fighter{i}_{stat}'] = np.random.normal(50, 15, n_samples)
+        
+        # Add stance data
+        for stance in stances:
+            stance_probs = {'Orthodox': 0.7, 'Southpaw': 0.25, 'Switch': 0.05}
+            data[f'fighter{i}_Stance_{stance}'] = np.random.choice(
+                [0, 1], n_samples, p=[1-stance_probs[stance], stance_probs[stance]]
+            )
+    
+    return pd.DataFrame(data)
+
+# OPTIMIZED feature engineering and model training
 @st.cache_data
 def load_and_optimize_models():
     try:
@@ -230,7 +297,7 @@ def load_and_optimize_models():
         if valid_mask.sum() < 100:
             return None, None, None, None, None, None, None, None, None, None, None, f"Insufficient valid target values: {valid_mask.sum()}"
         
-        # PROFESSIONAL FEATURE ENGINEERING
+        # PROFESSIONAL FEATURE ENGINEERING (restored full version)
         feature_columns = []
         
         # Base statistical features with comprehensive coverage
@@ -463,13 +530,13 @@ def load_and_optimize_models():
         X_test_selected = X_test.iloc[:, combined_selected]
         
         # PROFESSIONAL SCALING
-        scaler = RobustScaler()  # More robust to outliers than StandardScaler
+        scaler = RobustScaler()
         X_train_scaled = scaler.fit_transform(X_train_selected)
         X_test_scaled = scaler.transform(X_test_selected)
         
         # OPTIMIZED MODEL DEFINITIONS
         models = {
-            'Random Forest Pro': RandomForestClassifier(
+            'Random Forest': RandomForestClassifier(
                 n_estimators=150,
                 max_depth=12,
                 min_samples_split=8,
@@ -479,7 +546,7 @@ def load_and_optimize_models():
                 bootstrap=True,
                 random_state=42
             ),
-            'Gradient Boosting Pro': GradientBoostingClassifier(
+            'Gradient Boosting': GradientBoostingClassifier(
                 n_estimators=120,
                 max_depth=5,
                 learning_rate=0.08,
@@ -488,7 +555,7 @@ def load_and_optimize_models():
                 subsample=0.85,
                 random_state=42
             ),
-            'SVM Pro': SVC(
+            'SVM': SVC(
                 C=1.5,
                 gamma='scale',
                 kernel='rbf',
@@ -496,7 +563,7 @@ def load_and_optimize_models():
                 class_weight='balanced',
                 random_state=42
             ),
-            'Neural Network Pro': MLPClassifier(
+            'Neural Network': MLPClassifier(
                 hidden_layer_sizes=(128, 64, 32),
                 alpha=0.001,
                 learning_rate='adaptive',
@@ -505,7 +572,7 @@ def load_and_optimize_models():
                 validation_fraction=0.1,
                 random_state=42
             ),
-            'Logistic Regression Pro': LogisticRegression(
+            'Logistic Regression': LogisticRegression(
                 C=1.0,
                 penalty='l2',
                 class_weight='balanced',
@@ -567,7 +634,7 @@ def load_and_optimize_models():
             ensemble_train = ensemble.score(scaler.transform(X_train_selected), y_train)
             ensemble_test = ensemble.score(scaler.transform(X_test_selected), y_test)
             
-            model_results['Professional Ensemble'] = {
+            model_results['Advanced Ensemble'] = {
                 'cv_mean': None,
                 'cv_std': None,
                 'train_accuracy': ensemble_train,
@@ -576,7 +643,7 @@ def load_and_optimize_models():
                 'cv_scores': None
             }
             
-            trained_models['Professional Ensemble'] = ensemble
+            trained_models['Advanced Ensemble'] = ensemble
         
         # Find best model
         best_model_name = max(model_results, key=lambda x: model_results[x]['test_accuracy'])
@@ -586,53 +653,6 @@ def load_and_optimize_models():
         
     except Exception as e:
         return None, None, None, None, None, None, None, None, None, None, None, f"Error: {str(e)}"
-
-def create_sample_data():
-    """Create sample data for demonstration if real dataset is not available"""
-    np.random.seed(42)
-    n_samples = 1500
-    
-    # Fighter names
-    fighter_names = [f"Fighter_{i}" for i in range(1, 201)]
-    
-    # Generate fight data
-    data = {
-        'fighter1': np.random.choice(fighter_names, n_samples),
-        'fighter2': np.random.choice(fighter_names, n_samples),
-        'fight_outcome': np.random.choice([0, 1], n_samples)
-    }
-    
-    # Add fighter stats
-    stats = ['Weight', 'Reach', 'Height_in', 'Wins', 'Losses', 'Draws', 'Age',
-             'SLpM', 'StrAcc', 'StrDef', 'SApM', 'TDAvg', 'TDAcc', 'TDDef', 'SubAvg']
-    
-    stances = ['Orthodox', 'Southpaw', 'Switch']
-    
-    for i in [1, 2]:
-        for stat in stats:
-            if stat == 'Weight':
-                data[f'fighter{i}_{stat}'] = np.random.normal(175, 25, n_samples)
-            elif stat == 'Reach':
-                data[f'fighter{i}_{stat}'] = np.random.normal(72, 4, n_samples)
-            elif stat == 'Height_in':
-                data[f'fighter{i}_{stat}'] = np.random.normal(70, 3, n_samples)
-            elif stat in ['Wins', 'Losses']:
-                data[f'fighter{i}_{stat}'] = np.random.randint(0, 25, n_samples)
-            elif stat == 'Draws':
-                data[f'fighter{i}_{stat}'] = np.random.randint(0, 3, n_samples)
-            elif stat == 'Age':
-                data[f'fighter{i}_{stat}'] = np.random.normal(28, 4, n_samples)
-            else:
-                data[f'fighter{i}_{stat}'] = np.random.normal(50, 15, n_samples)
-        
-        # Add stance data
-        for stance in stances:
-            stance_probs = {'Orthodox': 0.7, 'Southpaw': 0.25, 'Switch': 0.05}
-            data[f'fighter{i}_Stance_{stance}'] = np.random.choice(
-                [0, 1], n_samples, p=[1-stance_probs[stance], stance_probs[stance]]
-            )
-    
-    return pd.DataFrame(data)
 
 # Fighter comparison function
 def compare_fighters_professional(df, model, scaler, selected_mask, all_features, selected_features, fighter1, fighter2):
@@ -678,10 +698,10 @@ def compare_fighters_professional(df, model, scaler, selected_mask, all_features
                 val2 = f2_data[key2]
                 fighter2_stats[stat] = float(val2) if pd.notna(val2) else 0
         
-        # Recreate features using the same engineering as training
+        # Recreate features using the same engineering as training (FULL VERSION)
         feature_vector = {}
         
-        # Reconstruct the features (simplified version)
+        # Reconstruct the features (full version)
         base_stats = ['Weight', 'Reach', 'Height_in', 'Wins', 'Losses', 'Draws',
                      'SLpM', 'StrAcc', 'StrDef', 'SApM', 'TDAvg', 'TDAcc', 'TDDef', 'SubAvg', 'Age']
         
@@ -693,7 +713,7 @@ def compare_fighters_professional(df, model, scaler, selected_mask, all_features
                 val1 = float(f1_data[key1]) if pd.notna(f1_data[key1]) else 0
                 val2 = float(f2_data[key2]) if pd.notna(f2_data[key2]) else 0
                 
-                # Recreate the same features as in training
+                # Recreate the same features as in training (all 5 types)
                 feature_vector[f'diff_{stat}'] = val1 - val2
                 feature_vector[f'ratio_{stat}'] = (val1 + 1) / (val2 + 1)
                 feature_vector[f'advantage_{stat}'] = 1 if val1 > val2 else 0
@@ -701,6 +721,57 @@ def compare_fighters_professional(df, model, scaler, selected_mask, all_features
                 total = val1 + val2
                 feature_vector[f'relative_{stat}'] = (val1 - val2) / total if total > 0 else 0
                 feature_vector[f'sq_diff_{stat}'] = (val1 - val2) ** 2
+        
+        # Advanced composite features
+        if f'fighter{f1_pos}_Wins' in f1_data.index and f'fighter{f1_pos}_Losses' in f1_data.index:
+            f1_wins = float(f1_data[f'fighter{f1_pos}_Wins']) if pd.notna(f1_data[f'fighter{f1_pos}_Wins']) else 0
+            f1_losses = float(f1_data[f'fighter{f1_pos}_Losses']) if pd.notna(f1_data[f'fighter{f1_pos}_Losses']) else 0
+            f2_wins = float(f2_data[f'fighter{f2_pos}_Wins']) if pd.notna(f2_data[f'fighter{f2_pos}_Wins']) else 0
+            f2_losses = float(f2_data[f'fighter{f2_pos}_Losses']) if pd.notna(f2_data[f'fighter{f2_pos}_Losses']) else 0
+            
+            f1_fights = f1_wins + f1_losses
+            f2_fights = f2_wins + f2_losses
+            
+            f1_winrate = f1_wins / (f1_fights + 1)
+            f2_winrate = f2_wins / (f2_fights + 1)
+            
+            # All win rate features
+            feature_vector['diff_winrate'] = f1_winrate - f2_winrate
+            feature_vector['ratio_winrate'] = (f1_winrate + 0.01) / (f2_winrate + 0.01)
+            feature_vector['advantage_winrate'] = 1 if f1_winrate > f2_winrate else 0
+            feature_vector['diff_experience'] = f1_fights - f2_fights
+            feature_vector['ratio_experience'] = (f1_fights + 1) / (f2_fights + 1)
+            feature_vector['advantage_experience'] = 1 if f1_fights > f2_fights else 0
+            
+            # Weighted experience
+            f1_weighted_exp = f1_winrate * np.log(f1_fights + 1)
+            f2_weighted_exp = f2_winrate * np.log(f2_fights + 1)
+            feature_vector['diff_weighted_experience'] = f1_weighted_exp - f2_weighted_exp
+        
+        # Striking efficiency features
+        if f'fighter{f1_pos}_SLpM' in f1_data.index and f'fighter{f1_pos}_StrAcc' in f1_data.index:
+            f1_slpm = float(f1_data[f'fighter{f1_pos}_SLpM']) if pd.notna(f1_data[f'fighter{f1_pos}_SLpM']) else 0
+            f1_acc = float(f1_data[f'fighter{f1_pos}_StrAcc']) if pd.notna(f1_data[f'fighter{f1_pos}_StrAcc']) else 0
+            f2_slpm = float(f2_data[f'fighter{f2_pos}_SLpM']) if pd.notna(f2_data[f'fighter{f2_pos}_SLpM']) else 0
+            f2_acc = float(f2_data[f'fighter{f2_pos}_StrAcc']) if pd.notna(f2_data[f'fighter{f2_pos}_StrAcc']) else 0
+            
+            f1_efficiency = f1_slpm * f1_acc / 100
+            f2_efficiency = f2_slpm * f2_acc / 100
+            
+            feature_vector['diff_striking_efficiency'] = f1_efficiency - f2_efficiency
+            feature_vector['ratio_striking_efficiency'] = (f1_efficiency + 0.1) / (f2_efficiency + 0.1)
+        
+        # Age and prime features
+        if f'fighter{f1_pos}_Age' in f1_data.index and f'fighter{f2_pos}_Age' in f2_data.index:
+            f1_age = float(f1_data[f'fighter{f1_pos}_Age']) if pd.notna(f1_data[f'fighter{f1_pos}_Age']) else 30
+            f2_age = float(f2_data[f'fighter{f2_pos}_Age']) if pd.notna(f2_data[f'fighter{f2_pos}_Age']) else 30
+            
+            f1_prime = np.exp(-(f1_age - 29)**2 / 50)
+            f2_prime = np.exp(-(f2_age - 29)**2 / 50)
+            
+            feature_vector['diff_age'] = f1_age - f2_age
+            feature_vector['diff_prime_factor'] = f1_prime - f2_prime
+            feature_vector['ratio_prime_factor'] = f1_prime / f2_prime
         
         # Create feature dataframe
         full_features_df = pd.DataFrame(0, index=[0], columns=all_features)
@@ -756,9 +827,6 @@ def compare_fighters_professional(df, model, scaler, selected_mask, all_features
 
 # Create advanced comparison charts
 def create_professional_charts(fighter1, fighter2, fighter1_stats, fighter2_stats):
-    # Set modern plotting style
-    plt.style.use('seaborn-v0_8-darkgrid')
-    
     # Define key metrics for radar chart
     key_metrics = ['SLpM', 'StrAcc', 'StrDef', 'TDAvg', 'Wins']
     
@@ -773,7 +841,7 @@ def create_professional_charts(fighter1, fighter2, fighter1_stats, fighter2_stat
     angles = [n / float(N) * 2 * np.pi for n in range(N)]
     angles += angles[:1]
     
-    fig1, ax1 = plt.subplots(figsize=(10, 10), subplot_kw=dict(polar=True))
+    fig1, ax1 = plt.subplots(figsize=(8, 8), subplot_kw=dict(polar=True))
     
     # Fighter 1 values
     values1 = [fighter1_stats[metric] for metric in available_metrics]
@@ -805,7 +873,7 @@ def create_professional_charts(fighter1, fighter2, fighter1_stats, fighter2_stat
     available_physical = [m for m in physical_metrics if m in fighter1_stats and m in fighter2_stats]
     
     if len(available_physical) > 0:
-        fig2, ax2 = plt.subplots(figsize=(12, 6))
+        fig2, ax2 = plt.subplots(figsize=(10, 6))
         
         f1_physical = [fighter1_stats[metric] for metric in available_physical]
         f2_physical = [fighter2_stats[metric] for metric in available_physical]
@@ -999,6 +1067,7 @@ if analysis_section == "🎯 Fight Predictions":
                 
                 # Detailed comparison
                 st.markdown("### 📋 Detailed Statistical Comparison")
+                st.caption("🟢 Green = Advantage | ⚖️ Gray = Equal | Note: For losses, fewer is always better!")
                 
                 comparison_stats = ['Wins', 'Losses', 'Weight', 'Reach', 'StrAcc', 'StrDef', 'TDAvg']
                 
@@ -1008,8 +1077,9 @@ if analysis_section == "🎯 Fight Predictions":
                         
                         val1 = result['fighter1_stats'][stat]
                         val2 = result['fighter2_stats'][stat]
-                        diff = val1 - val2
-                        advantage = "🔴 Fighter 1" if diff > 0 else "🔵 Fighter 2" if diff < 0 else "⚖️ Equal"
+                        
+                        # Use the helper function to get properly formatted advantage text
+                        advantage_text, advantage_color = get_stat_advantage_text(stat, val1, val2, fighter1, fighter2)
                         
                         with col1:
                             st.write(f"**{stat}**")
@@ -1018,12 +1088,24 @@ if analysis_section == "🎯 Fight Predictions":
                         with col3:
                             st.write(f"🔵 {val2:.1f}")
                         with col4:
-                            if diff > 0:
-                                st.markdown(f"<span class='stat-diff-positive'>{advantage} (+{diff:.1f})</span>", unsafe_allow_html=True)
-                            elif diff < 0:
-                                st.markdown(f"<span class='stat-diff-negative'>{advantage} ({diff:.1f})</span>", unsafe_allow_html=True)
-                            else:
-                                st.markdown(f"<span class='stat-diff-neutral'>{advantage}</span>", unsafe_allow_html=True)
+                            st.markdown(f"<span class='{advantage_color}'>{advantage_text}</span>", unsafe_allow_html=True)
+                
+                # Additional explanation
+                with st.expander("📖 Statistics Explanation"):
+                    st.markdown("""
+                    **🥊 Key Metrics Explained:**
+                    - **Wins/Losses:** Fight record (more wins = better, fewer losses = better)
+                    - **Weight/Reach/Height:** Physical attributes (advantages depend on fighting style)
+                    - **StrAcc:** Striking Accuracy % (higher = better precision)
+                    - **StrDef:** Striking Defense % (higher = better defense)
+                    - **TDAvg:** Average Takedowns per 15 minutes (higher = more grappling)
+                    
+                    **🎯 Advantage Logic:**
+                    - 🟢 **Green:** Advantage for that fighter
+                    - ⚖️ **Gray:** Equal/Similar performance
+                    
+                    **Note:** For Losses, having "fewer" is always better!
+                    """)
         else:
             st.error("❌ Could not generate prediction for these fighters. Please try different fighters.")
 
@@ -1251,11 +1333,11 @@ elif analysis_section == "🔬 Feature Engineering":
     
     # Categorize features
     categories = {
-        'Basic Differences': [f for f in selected_features if f.startswith('diff_') and 'ratio_' not in f and 'relative_' not in f],
+        'Basic Differences': [f for f in selected_features if f.startswith('diff_') and 'ratio_' not in f and 'advantage_' not in f],
         'Ratio Features': [f for f in selected_features if f.startswith('ratio_')],
         'Advantage Indicators': [f for f in selected_features if f.startswith('advantage_')],
-        'Relative Features': [f for f in selected_features if f.startswith('relative_')],
-        'Advanced Composites': [f for f in selected_features if any(x in f for x in ['winrate', 'experience', 'efficiency', 'prime', 'physical', 'grappling', 'striking'])]
+        'Win Rate Features': [f for f in selected_features if 'winrate' in f],
+        'Stance Features': [f for f in selected_features if 'Stance' in f]
     }
     
     col1, col2 = st.columns(2)
@@ -1275,11 +1357,8 @@ elif analysis_section == "🔬 Feature Engineering":
         ("🔢 Basic Differences", "fighter1_stat - fighter2_stat", "Captures absolute advantages"),
         ("📊 Ratio Features", "(fighter1_stat + 1) / (fighter2_stat + 1)", "Robust proportional relationships"),
         ("🎯 Advantage Indicators", "1 if fighter1_stat > fighter2_stat else 0", "Binary competitive advantages"),
-        ("📐 Relative Features", "(fighter1 - fighter2) / (fighter1 + fighter2)", "Normalized comparisons"),
-        ("🧮 Composite Metrics", "Combined multi-stat calculations", "Domain-specific combinations"),
-        ("🔄 Squared Differences", "(fighter1_stat - fighter2_stat)²", "Non-linear effect capture"),
-        ("⭐ Prime Factors", "Age-based performance curves", "Career stage optimization"),
-        ("🥊 Stance Matchups", "Fighting style compatibility", "Technical advantage analysis")
+        ("📈 Win Rate Features", "wins / (wins + losses + 1)", "Historical success patterns"),
+        ("🥊 Stance Matchups", "Orthodox vs Southpaw analysis", "Fighting style compatibility")
     ]
     
     for technique, formula, description in techniques:
@@ -1328,10 +1407,10 @@ elif analysis_section == "🏆 System Overview":
     with col1:
         st.markdown("""
         **🤖 Machine Learning Pipeline:**
-        - Advanced Feature Engineering (8 categories)
-        - Multi-Method Feature Selection
+        - Advanced Feature Engineering (5 categories)
+        - Statistical Feature Selection
         - Robust Data Scaling
-        - 5-Fold Cross-Validation
+        - 3-Fold Cross-Validation
         - Ensemble Model Creation
         - Overfitting Prevention
         """)
@@ -1339,12 +1418,11 @@ elif analysis_section == "🏆 System Overview":
     with col2:
         st.markdown("""
         **📊 Model Portfolio:**
-        - Random Forest Professional
-        - Gradient Boosting Professional  
-        - Support Vector Machine Professional
-        - Neural Network Professional
-        - Logistic Regression Professional
-        - Professional Ensemble (Best Models)
+        - Random Forest
+        - Gradient Boosting  
+        - Support Vector Machine
+        - Logistic Regression
+        - Advanced Ensemble (Best Models)
         """)
     
     # Performance summary
@@ -1352,8 +1430,6 @@ elif analysis_section == "🏆 System Overview":
     
     best_models = sorted([(name, res['test_accuracy']) for name, res in model_results.items()], 
                         key=lambda x: x[1], reverse=True)[:3]
-    
-    col1, col2, col3 = st.columns(3)
     
     col1, col2, col3 = st.columns(3)
     
@@ -1389,114 +1465,18 @@ elif analysis_section == "🏆 System Overview":
     
     **🎯 Practical Applications:**
     - Professional fight analysis and breakdown
-    - Betting and fantasy sports optimization  
+    - Sports analytics and commentary enhancement
     - Fighter development and training focus
-    - Matchmaking and promotion planning
-    - Sports journalism and commentary enhancement
+    - Data-driven insights for MMA enthusiasts
     """)
     
-    # Advanced Algorithm Explanation
-    ensemble_models = [name for name in model_results.keys() if is_ensemble_model(name)]
-    if ensemble_models:
-        st.markdown("### 🧬 Advanced Algorithm Fusion Technology")
-        
-        st.info("""
-        🔬 **Revolutionary Ensemble Architecture**
-        
-        Our system employs cutting-edge **Democratic Algorithm Fusion** - a sophisticated approach that combines multiple AI models to achieve superhuman prediction accuracy.
-        """)
-        
-        for ensemble_name in ensemble_models:
-            ensemble_info = get_ensemble_info(ensemble_name, trained_models)
-            if ensemble_info:
-                st.markdown(f"**🏗️ {ensemble_name} Architecture:**")
-                
-                st.markdown("""
-                **📊 Algorithm Selection Process:**
-                1. **Individual Training** → Each algorithm learns patterns independently
-                2. **Performance Screening** → Only models with high accuracy AND low overfitting qualify
-                3. **Democratic Fusion** → Qualified models vote on each prediction
-                4. **Probability Averaging** → Final prediction = weighted average of all votes
-                """)
-                
-                st.markdown("**🤖 Component Algorithms:**")
-                for i, component in enumerate(ensemble_info['components'], 1):
-                    st.write(f"   {i}. **{component}** - Specialized in different pattern recognition aspects")
-                
-                st.warning(f"""
-                **🧠 Why This Works:**
-                - **Bias Reduction** → Individual model weaknesses are compensated by others
-                - **Variance Reduction** → Multiple perspectives reduce prediction uncertainty  
-                - **Robustness** → System remains stable even if one component fails
-                - **Synergy Effect** → Combined intelligence exceeds sum of individual parts
-                """)
-                
-                st.code("""
-                Mathematical Foundation:
-                Final_Prediction = Σ(Model_i_Probability × Weight_i) / Σ(Weight_i)
-                where Weight_i = Model_i_Performance_Score
-                """, language="python")
-    
-    st.markdown("### 🎓 Academic Contributions")
-    
-    st.markdown("""
-    **📚 This research contributes to:**
-    
-    - **Sports Analytics** → Advanced predictive modeling in combat sports
-    - **Machine Learning** → Ensemble method optimization for imbalanced datasets  
-    - **Feature Engineering** → Domain-specific composite feature creation
-    - **Model Selection** → Automated ensemble composition based on performance criteria
-    - **Applied AI** → Real-world deployment of academic ML techniques
-    
-    **🏆 Novel Approaches Implemented:**
-    - Multi-tier feature engineering with 8 distinct categories
-    - Automatic ensemble selection based on dual performance criteria
-    - Prime career factor modeling using age-performance curves
-    - Stance-specific matchup analysis integration
-    - Robust evaluation with bias-variance decomposition
-    """)
-    
-    # Footer
     st.markdown("---")
-    
-    # Scientific Methodology Summary
-    st.markdown("### 🔬 Scientific Methodology Summary")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.markdown("""
-        **📊 Data Science Pipeline:**
-        1. **Data Acquisition** → Multi-source UFC fight database
-        2. **Feature Engineering** → 8-tier advanced feature creation
-        3. **Feature Selection** → Statistical + Model-based hybrid approach
-        4. **Model Training** → 5 optimized algorithms with hyperparameter tuning
-        5. **Ensemble Creation** → Automatic fusion of top performers
-        6. **Validation** → 5-fold cross-validation + holdout testing
-        7. **Performance Analysis** → Multi-metric evaluation framework
-        """)
-    
-    with col2:
-        st.markdown("""
-        **🎯 Quality Assurance:**
-        - **Overfitting Prevention** → Regularization + early stopping
-        - **Bias Mitigation** → Stratified sampling + balanced classes
-        - **Robustness Testing** → Multiple algorithm comparison
-        - **Reproducibility** → Fixed random seeds + version control
-        - **Scalability** → Optimized feature selection pipeline
-        - **Interpretability** → Feature importance analysis
-        - **Generalization** → Large independent test set (25%)
-        """)
-    
-    st.markdown("---")
-    
-    # Final professional footer
     st.info(f"""
     **🏆 Professional UFC Prediction System v2.0 - Research Grade Implementation**
     
     📊 **Performance:** {best_accuracy:.1f}% accuracy | {best_overfitting:.1f}% overfitting | {len(selected_features)} optimized features
     
-    🔬 **Technology:** Advanced ML pipeline with democratic ensemble fusion and multi-tier feature engineering
+    🔬 **Technology:** Advanced ML pipeline with ensemble fusion and professional feature engineering
     
     🎯 **Application:** Professional-grade UFC fight outcome prediction with comprehensive statistical analysis
     
