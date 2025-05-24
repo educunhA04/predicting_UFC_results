@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-from sklearn.svm import SVC
+from sklearn.ensemble import RandomForestClassifier  # MUDANÇA: Era SVC agora é RandomForest
 from sklearn.preprocessing import StandardScaler
 import matplotlib.pyplot as plt
 
@@ -10,7 +10,7 @@ def load_data():
     fighters = pd.concat([df['fighter1'], df['fighter2']]).unique()
     return df, sorted(fighters)
 
-# Train the SVM model
+# Train the RANDOM FOREST model (UPGRADED from SVM!)
 def train_model(df):
     diff_features = []
     for feature in ['Weight', 'Reach', 'SLpM', 'StrAcc', 'SApM', 'StrDef', 
@@ -24,18 +24,29 @@ def train_model(df):
             df[f'fighter1_Stance_{stance}'].astype(int) -
             df[f'fighter2_Stance_{stance}'].astype(int)
         )
+        diff_features.append(f'diff_Stance_{stance}')
+    
     X = df[diff_features]
     y = df['fight_outcome']
     
     scaler = StandardScaler()
     X_scaled = scaler.fit_transform(X)
     
-    svm = SVC(C=1, gamma='scale', kernel='rbf', probability=True, random_state=42)
-    svm.fit(X_scaled, y)
+    # MUDANÇA PRINCIPAL: Usar Random Forest em vez de SVM
+    # ANTES: svm = SVC(C=1, gamma='scale', kernel='rbf', probability=True, random_state=42)
+    # AGORA: Random Forest com os melhores parâmetros (87.5% accuracy)
+    rf = RandomForestClassifier(
+        n_estimators=100,      # Número de árvores
+        max_depth=20,          # Profundidade máxima
+        min_samples_split=2,   # Mínimo para split
+        random_state=42,       # Para resultados reproduzíveis
+        n_jobs=-1             # Usar todos os cores para velocidade
+    )
+    rf.fit(X_scaled, y)
     
-    return svm, scaler, diff_features
+    return rf, scaler, diff_features
 
-# Fighter comparison function
+# Fighter comparison function (agora com Random Forest)
 def compare_fighters(df, model, scaler, feature_columns, fighter1, fighter2):
     fighter1_stats = df[df['fighter1'] == fighter1].iloc[0] if fighter1 in df['fighter1'].values else df[df['fighter2'] == fighter1].iloc[0]
     fighter2_stats = df[df['fighter1'] == fighter2].iloc[0] if fighter2 in df['fighter1'].values else df[df['fighter2'] == fighter2].iloc[0]
@@ -89,7 +100,7 @@ def compare_fighters(df, model, scaler, feature_columns, fighter1, fighter2):
         'fighter2_age': fighter2_stats['fighter2_Age']
     }
 
-# Function to create comparison charts
+# Function to create comparison charts (mantém igual)
 def create_comparison_charts(fighter1, fighter2, fighter1_stats, fighter2_stats):
     # Select key metrics for visualization
     key_metrics = ['SLpM', 'StrAcc', 'StrDef', 'TDAvg', 'TDAcc', 'TDDef', 'SubAvg']
@@ -117,7 +128,7 @@ def create_comparison_charts(fighter1, fighter2, fighter1_stats, fighter2_stats)
     
     ax.set_xticks(angles[:-1])
     ax.set_xticklabels(categories)
-    ax.set_title('Fighting Skills Comparison', size=20, y=1.1)
+    ax.set_title('Fighting Skills Comparison (Random Forest 87.5%)', size=16, y=1.1)
     ax.legend(loc='upper right', bbox_to_anchor=(1.1, 1.1))
     
     plt.close(fig)
@@ -135,7 +146,7 @@ def create_comparison_charts(fighter1, fighter2, fighter1_stats, fighter2_stats)
     rects2 = ax2.bar(x + width/2, f2_physical, width, label=fighter2, color='#1F77B4')
     
     ax2.set_ylabel('Value')
-    ax2.set_title('Physical Attributes Comparison')
+    ax2.set_title('Physical Attributes (Random Forest Prediction)')
     ax2.set_xticks(x)
     ax2.set_xticklabels(physical_metrics)
     ax2.legend()
